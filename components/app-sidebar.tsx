@@ -1,5 +1,4 @@
-"use client"
-
+'use client'
 import * as React from "react"
 import {
   IconChartBar,
@@ -28,11 +27,6 @@ import Image from "next/image"
 import { Separator } from "./ui/separator"
 
 const data = {
-  user: {
-    name: "shadcn",
-    email: "m@example.com",
-    avatar: "/avatars/shadcn.jpg",
-  },
   navMain: [
     {
       title: "Threads",
@@ -62,6 +56,9 @@ const data = {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+
+  
+  
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
@@ -83,7 +80,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavMain items={data.navMain} />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser />
       </SidebarFooter>
     </Sidebar>
   )

@@ -4,13 +4,20 @@ import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar"
+import { supabase } from "@/lib/supabase"
+
 
 export default function DashboardLayout({
+
   children,
 }: {
   children: React.ReactNode
 }) {
+
+
   return (
+
+
     <SidebarProvider
       style={
         {

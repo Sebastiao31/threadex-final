@@ -8,6 +8,8 @@ import {
   IconUserCircle,
   IconSelector,
 } from "@tabler/icons-react"
+import { useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
 
 import {
   Avatar,
@@ -30,16 +32,93 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 
-export function NavUser({
-  user,
-}: {
-  user: {
-    name: string
-    email: string
-    avatar: string
-  }
-}) {
+interface UserData {
+  name: string
+  screen_name: string
+  profile_image_url: string
+  email: string
+}
+
+export function NavUser() {
   const { isMobile } = useSidebar()
+  const router = useRouter()
+  const [userData, setUserData] = useState<UserData | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const response = await fetch('/api/user/profile')
+        if (response.ok) {
+          const data = await response.json()
+          setUserData(data)
+        }
+      } catch (error) {
+        console.error('Failed to fetch user data:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchUserData()
+  }, [])
+
+  const handleLogout = async () => {
+    try {
+      const response = await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (response.ok) {
+        router.push('/')
+      } else {
+        console.error('Logout failed')
+      }
+    } catch (error) {
+      console.error('Logout error:', error)
+    }
+  }
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <SidebarMenuButton size="lg" disabled>
+            <Avatar className="h-8 w-8 rounded-lg">
+              <AvatarFallback className="rounded-lg animate-pulse">...</AvatarFallback>
+            </Avatar>
+            <div className="grid flex-1 text-left text-sm leading-tight">
+              <span className="truncate font-medium animate-pulse">Loading...</span>
+              <span className="text-muted-foreground truncate text-xs">@loading</span>
+            </div>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      </SidebarMenu>
+    )
+  }
+
+  // Error state
+  if (!userData) {
+    return (
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <SidebarMenuButton size="lg" disabled>
+            <Avatar className="h-8 w-8 rounded-lg">
+              <AvatarFallback className="rounded-lg">U</AvatarFallback>
+            </Avatar>
+            <div className="grid flex-1 text-left text-sm leading-tight">
+              <span className="truncate font-medium">User</span>
+              <span className="text-muted-foreground truncate text-xs">@user</span>
+            </div>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      </SidebarMenu>
+    )
+  }
 
   return (
     <SidebarMenu>
@@ -50,14 +129,14 @@ export function NavUser({
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
-              <Avatar className="h-8 w-8 rounded-lg grayscale">
-                <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+              <Avatar className="h-8 w-8 rounded-lg">
+                <AvatarImage src={userData.profile_image_url} alt={userData.name} />
+                <AvatarFallback className="rounded-lg">{userData.name?.charAt(0) || 'U'}</AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">{user.name}</span>
+                <span className="truncate font-medium">{userData.name}</span>
                 <span className="text-muted-foreground truncate text-xs">
-                  {user.email}
+                  @{userData.screen_name}
                 </span>
               </div>
               <IconSelector className="ml-auto size-4" />
@@ -72,13 +151,13 @@ export function NavUser({
             <DropdownMenuLabel className="p-0 font-normal">
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
-                  <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                  <AvatarImage src={userData.profile_image_url} alt={userData.name} />
+                  <AvatarFallback className="rounded-lg">{userData.name?.charAt(0) || 'U'}</AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">{user.name}</span>
+                  <span className="truncate font-medium">{userData.name}</span>
                   <span className="text-muted-foreground truncate text-xs">
-                    {user.email}
+                    @{userData.screen_name}
                   </span>
                 </div>
               </div>
@@ -99,7 +178,10 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-red-500 hover:text-red-500 hover:cursor-pointer hover:bg-red-500/6">
+            <DropdownMenuItem 
+              onClick={handleLogout}
+              className="text-red-500 hover:text-red-500 hover:cursor-pointer hover:bg-red-500/6"
+            >
               <IconLogout className="text-red-500"/>
               Log out
             </DropdownMenuItem>
