@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
 
 export default function LoadingPage() {
   const [status, setStatus] = useState('Setting up your account...')
@@ -10,23 +11,10 @@ export default function LoadingPage() {
   useEffect(() => {
     const setupUserSession = async () => {
       try {
-        // Step 1: Check if we have the basic auth cookies
+        // Verify Supabase session
         setStatus('Verifying authentication...')
-        await new Promise(resolve => setTimeout(resolve, 300))
-
-        // Step 2: Fetch user profile to ensure data is available
-        setStatus('Loading your profile...')
-        const response = await fetch('/api/user/profile')
-        
-        if (!response.ok) {
-          throw new Error('Failed to load user profile')
-        }
-
-        const userData = await response.json()
-        
-        if (!userData.name) {
-          throw new Error('User data not complete')
-        }
+        const { data } = await supabase.auth.getSession()
+        if (!data.session) throw new Error('No active session')
 
         // Step 3: All set, redirect to dashboard
         setStatus('Redirecting to dashboard...')
@@ -37,9 +25,9 @@ export default function LoadingPage() {
         console.error('Loading error:', error)
         setStatus('Something went wrong. Redirecting...')
         
-        // Fallback: redirect anyway after a delay
+        // Fallback: redirect to login after a delay
         setTimeout(() => {
-          router.push('/dashboard')
+          router.push('/login')
         }, 2000)
       }
     }

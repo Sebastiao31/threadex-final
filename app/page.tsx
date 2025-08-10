@@ -1,10 +1,19 @@
+'use client'
 import Image from "next/image";
 import NavBar from "@/components/layout/NavBar";
 import HeroSection from "@/components/landing/HeroSection";
 import Features from "@/components/landing/Features";
 import TwitterSignIn from "@/components/TwitterSignIn";
+import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
+import { useRouter } from "next/navigation";
 
 export default function Home() {
+
+  
+
+  
+
   return (
     <div className="pt-4 px-12 max-w-[1200px] mx-auto pb-16">
       <main className="">

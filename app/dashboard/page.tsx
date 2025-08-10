@@ -1,53 +1,34 @@
 'use client'
 import ThreadGeneratorForm from "@/components/ThreadGeneratorForm"
-import DashboardSignIn from "@/components/DashboardSignIn"
 import { useEffect, useState } from "react"
+import { supabase } from "@/lib/supabase"
+import TwitterModal from "@/components/twitter-modal"
 
-interface UserData {
-  name: string
-  screen_name: string
-  profile_image_url: string
-  email: string
-}
+
 
 export default function Page() {
-  const [userData, setUserData] = useState<UserData | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [userName, setUserName] = useState("user")
-  const [showSignInModal, setShowSignInModal] = useState(false)
+  const [userName, setUserName] = useState<string>("user")
+  const [isAuthed, setIsAuthed] = useState<boolean>(false)
+  const [showWelcome, setShowWelcome] = useState<boolean>(true)
 
   useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        const response = await fetch('/api/user/profile')
-        if (response.ok) {
-          const data = await response.json()
-          setUserData(data)
-          setUserName(data.name)
-          setShowSignInModal(false) // Hide modal if user is authenticated
-        } else {
-          // User is not authenticated
-          setShowSignInModal(true)
-        }
-      } catch (error) {
-        console.error('Failed to fetch user data:', error)
-        setShowSignInModal(true) // Show modal on error
-      } finally {
-        setIsLoading(false)
+    const load = async () => {
+      const { data } = await supabase.auth.getUser()
+      const user = data.user
+      if (user) {
+        const fullName: string | undefined = (user.user_metadata as any)?.full_name
+        const displayName: string | undefined = (user.user_metadata as any)?.display_name
+        setUserName(fullName || displayName || "user")
+        setIsAuthed(true)
+      } else {
+        setIsAuthed(false)
       }
     }
-
-    fetchUserData()
+    load()
   }, [])
 
   return (
     <>
-      {/* Sign In Modal */}
-      <DashboardSignIn 
-        isOpen={showSignInModal} 
-        onClose={() => setShowSignInModal(false)} 
-      />
-      
       {/* Dashboard Content */}
       <div className="flex flex-col items-center h-full justify-center gap-4 pb-24 px-4 lg:gap-2 lg:px-6 max-sm:justify-between max-sm:pt-32 max-sm:pb-4">
         <div className="flex flex-col gap-10 items-center justify-center">
