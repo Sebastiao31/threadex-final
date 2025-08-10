@@ -65,7 +65,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(500).json({ error: 'Failed to save Twitter user' })
     }
 
-    return res.redirect('/loading')
+    return res.redirect('/dashboard')
   } catch (err: any) {
     console.error('Twitter OAuth error:', err.response?.data || err.message)
     return res.status(500).json({ error: 'Twitter auth flow failed' })

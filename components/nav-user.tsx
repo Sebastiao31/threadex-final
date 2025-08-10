@@ -54,18 +54,37 @@ export function NavUser() {
   const [userData, setUserData] = useState<UserData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [authInfo, setAuthInfo] = useState<{ name: string; email: string; avatar_url: string } | null>(null)
+  const [accounts, setAccounts] = useState<Array<{ twitter_id: string; screen_name: string; name: string; profile_image_url: string; isActive: boolean }>>([])
+  const [loadingAccounts, setLoadingAccounts] = useState<boolean>(true)
+
+  const handleAddXAccount = async () => {
+    try {
+      const { data, error } = await supabase.auth.getUser()
+      if (error) {
+        console.warn('[NavUser] supabase.auth.getUser error:', error)
+      }
+      const uid = data.user?.id
+      if (!uid) {
+        console.warn('[NavUser] No Supabase user id found; redirecting to login')
+        router.push('/login')
+        return
+      }
+      const target = `/api/auth/request-token?uid=${encodeURIComponent(uid)}`
+      console.log('[NavUser] Redirecting to link X account:', target)
+      window.location.href = target
+    } catch (err) {
+      console.error('[NavUser] Failed to start X linking flow:', err)
+    }
+  }
 
   useEffect(() => {
     const fetchUserData = async () => {
       try {
-        const response = await fetch('/api/user/profile')
-        if (response.ok) {
-          const data = await response.json()
-          setUserData(data)
+        // Fetch signed-in auth user (Supabase auth.users) first
+        const { data: userRes, error: authErr } = await supabase.auth.getUser()
+        if (authErr) {
+          console.warn('[NavUser] supabase.auth.getUser error:', authErr)
         }
-
-        // Fetch signed-in auth user (Supabase auth.users)
-        const { data: userRes } = await supabase.auth.getUser()
         const authUser = userRes.user
         if (authUser) {
           const fullName: string | undefined = (authUser.user_metadata as any)?.full_name
@@ -74,6 +93,36 @@ export function NavUser() {
           const email: string = authUser.email ?? ''
           const name = fullName || displayName || (email ? email.split('@')[0] : 'User')
           setAuthInfo({ name, email, avatar_url: avatarUrl || '' })
+
+          // Now fetch linked X profile from our API using the Supabase uid
+          try {
+            const profileRes = await fetch(`/api/user/profile?uid=${encodeURIComponent(authUser.id)}`)
+            if (profileRes.ok) {
+              const data = await profileRes.json()
+              setUserData(data)
+            } else {
+              setUserData(null)
+            }
+          } catch (e) {
+            console.warn('[NavUser] Failed to fetch /api/user/profile:', e)
+            setUserData(null)
+          }
+
+          // Fetch all connected accounts for switcher
+          try {
+            setLoadingAccounts(true)
+            const accountsRes = await fetch(`/api/user/accounts?uid=${encodeURIComponent(authUser.id)}`)
+            if (accountsRes.ok) {
+              const json = await accountsRes.json()
+              setAccounts(json.accounts || [])
+            } else {
+              setAccounts([])
+            }
+          } catch (e) {
+            setAccounts([])
+          } finally {
+            setLoadingAccounts(false)
+          }
         }
       } catch (error) {
         console.error('Failed to fetch user data:', error)
@@ -90,16 +139,49 @@ export function NavUser() {
     router.push('/')
   }
 
+  const handleSwitchAccount = async (twitterId: string) => {
+    try {
+      const { data: userRes } = await supabase.auth.getUser()
+      const uid = userRes.user?.id
+      if (!uid) return
+      const res = await fetch(`/api/user/switch-account?uid=${encodeURIComponent(uid)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ twitter_id: twitterId }),
+      })
+      if (res.ok) {
+        // Refresh accounts and profile
+        const [profileRes, accountsRes] = await Promise.all([
+          fetch(`/api/user/profile?uid=${encodeURIComponent(uid)}`),
+          fetch(`/api/user/accounts?uid=${encodeURIComponent(uid)}`),
+        ])
+        if (profileRes.ok) setUserData(await profileRes.json())
+        if (accountsRes.ok) {
+          const json = await accountsRes.json()
+          setAccounts(json.accounts || [])
+        }
+
+        // Notify rest of the app that active X account changed
+        try {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('x-account-switched', { detail: { twitterId } }))
+          }
+        } catch {}
+      }
+    } catch (e) {}
+  }
+
   // Loading state
   if (isLoading) {
     return (
       <SidebarMenu>
         <SidebarMenuItem>
+          <CreditContainer loading />
           <SidebarMenuButton size="lg" disabled>
             <Skeleton className="h-8 w-8 rounded-lg" />
             <div className="grid flex-1 text-left text-sm leading-tight gap-1">
-              <Skeleton className="h-4 w-20" />
-              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-3 w-20" />
             </div>
           </SidebarMenuButton>
         </SidebarMenuItem>
@@ -110,7 +192,7 @@ export function NavUser() {
   return (
     <SidebarMenu>
       <SidebarMenuItem>
-        <CreditContainer/>
+        <CreditContainer loading={isLoading} />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -138,29 +220,46 @@ export function NavUser() {
             sideOffset={4}
           >
             <DropdownMenuLabel className="p-0 font-normal">
-              <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                <Avatar className="h-8 w-8 rounded-lg">
-                  <AvatarImage src={userData?.profile_image_url ?? ''} alt={userData?.name ?? 'User'} />
-                  <AvatarFallback className="rounded-lg">{(userData?.name ?? 'User').charAt(0)}</AvatarFallback>
-                </Avatar>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">{userData?.name ?? 'No X User Connected'}</span>
-                  <span className="text-muted-foreground truncate text-xs">
-                    @{userData?.screen_name ?? 'user'}
-                  </span>
-                </div>
-              </div>
-
               
+
+              {/* Accounts list */}
+              <div className="max-h-60 overflow-auto">
+                {loadingAccounts ? (
+                  <div className="px-1 py-1.5 text-xs text-muted-foreground">Loading accounts…</div>
+                ) : accounts.length === 0 ? (
+                  <div className="px-1 py-1.5 text-xs text-muted-foreground">No additional accounts</div>
+                ) : (
+                  accounts.map((acc) => (
+                    <button
+                      key={acc.twitter_id}
+                      onClick={() => handleSwitchAccount(acc.twitter_id)}
+                      className={`w-full flex items-center gap-2 mb-1 px-2 py-1.5 text-left text-sm rounded-md hover:cursor-pointer hover:bg-accent ${acc.isActive ? 'bg-accent' : ''}`}
+                    >
+                      <Avatar className="h-6 w-6 rounded-lg">
+                        <AvatarImage src={acc.profile_image_url} alt={acc.name} />
+                        <AvatarFallback className="rounded-lg">{acc.name?.charAt(0) ?? 'U'}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex flex-col">
+                        <span className="truncate text-sm">{acc.name}</span>
+                        <span className="text-muted-foreground truncate text-xs">@{acc.screen_name}</span>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
             
-              <DropdownMenuItem asChild>
-                <a href="/api/auth/request-token" className="flex items-center gap-2">
-                  <IconPlus />
-                  Add<IconBrandX className="size-3 mx-[-4px]" />Account
-                </a>
+              <DropdownMenuItem
+                onSelect={(e) => {
+                  e.preventDefault()
+                  handleAddXAccount()
+                }}
+                className="flex items-center gap-2"
+              >
+                <IconPlus />
+                Add<IconBrandX className="size-3 mx-[-4px]" />Account
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <IconCoins />
