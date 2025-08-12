@@ -54,11 +54,13 @@ export function NavUser() {
   const [userData, setUserData] = useState<UserData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [authInfo, setAuthInfo] = useState<{ name: string; email: string; avatar_url: string } | null>(null)
-  const [accounts, setAccounts] = useState<Array<{ twitter_id: string; screen_name: string; name: string; profile_image_url: string; isActive: boolean }>>([])
+  const [accounts, setAccounts] = useState<Array<{ twitter_id: string; screen_name: string; name: string; profile_image_url: string }>>([])
   const [loadingAccounts, setLoadingAccounts] = useState<boolean>(true)
+  const [menuOpen, setMenuOpen] = useState<boolean>(false)
 
   const handleAddXAccount = async () => {
     try {
+      setMenuOpen(false)
       const { data, error } = await supabase.auth.getUser()
       if (error) {
         console.warn('[NavUser] supabase.auth.getUser error:', error)
@@ -94,21 +96,7 @@ export function NavUser() {
           const name = fullName || displayName || (email ? email.split('@')[0] : 'User')
           setAuthInfo({ name, email, avatar_url: avatarUrl || '' })
 
-          // Now fetch linked X profile from our API using the Supabase uid
-          try {
-            const profileRes = await fetch(`/api/user/profile?uid=${encodeURIComponent(authUser.id)}`)
-            if (profileRes.ok) {
-              const data = await profileRes.json()
-              setUserData(data)
-            } else {
-              setUserData(null)
-            }
-          } catch (e) {
-            console.warn('[NavUser] Failed to fetch /api/user/profile:', e)
-            setUserData(null)
-          }
-
-          // Fetch all connected accounts for switcher
+          // Fetch all connected X accounts just to list them
           try {
             setLoadingAccounts(true)
             const accountsRes = await fetch(`/api/user/accounts?uid=${encodeURIComponent(authUser.id)}`)
@@ -139,37 +127,7 @@ export function NavUser() {
     router.push('/')
   }
 
-  const handleSwitchAccount = async (twitterId: string) => {
-    try {
-      const { data: userRes } = await supabase.auth.getUser()
-      const uid = userRes.user?.id
-      if (!uid) return
-      const res = await fetch(`/api/user/switch-account?uid=${encodeURIComponent(uid)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ twitter_id: twitterId }),
-      })
-      if (res.ok) {
-        // Refresh accounts and profile
-        const [profileRes, accountsRes] = await Promise.all([
-          fetch(`/api/user/profile?uid=${encodeURIComponent(uid)}`),
-          fetch(`/api/user/accounts?uid=${encodeURIComponent(uid)}`),
-        ])
-        if (profileRes.ok) setUserData(await profileRes.json())
-        if (accountsRes.ok) {
-          const json = await accountsRes.json()
-          setAccounts(json.accounts || [])
-        }
-
-        // Notify rest of the app that active X account changed
-        try {
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('x-account-switched', { detail: { twitterId } }))
-          }
-        } catch {}
-      }
-    } catch (e) {}
-  }
+  // Switching removed
 
   // Loading state
   if (isLoading) {
@@ -194,20 +152,20 @@ export function NavUser() {
       <SidebarMenuItem>
         <CreditContainer loading={isLoading} />
 
-        <DropdownMenu>
+        <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
               <Avatar className="h-8 w-8 rounded-lg">
-                <AvatarImage src={userData?.profile_image_url ?? ''} alt={userData?.name ?? 'User'} />
-                <AvatarFallback className="rounded-lg">{(userData?.name ?? 'User').charAt(0)}</AvatarFallback>
+                <AvatarImage src={authInfo?.avatar_url ?? ''} alt={authInfo?.name ?? 'User'} />
+                <AvatarFallback className="rounded-lg">{(authInfo?.name ?? 'User').charAt(0)}</AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">{userData?.name ?? 'No X User Connected'}</span>
+                <span className="truncate font-medium">{authInfo?.name ?? 'User'}</span>
                 <span className="text-muted-foreground truncate text-xs">
-                  @{userData?.screen_name ?? 'user'}
+                  {authInfo?.email ?? ''}
                 </span>
               </div>
               <IconSelector className="ml-auto size-4" />
@@ -222,7 +180,7 @@ export function NavUser() {
             <DropdownMenuLabel className="p-0 font-normal">
               
 
-              {/* Accounts list */}
+              {/* Accounts list (read-only) */}
               <div className="max-h-60 overflow-auto">
                 {loadingAccounts ? (
                   <div className="px-1 py-1.5 text-xs text-muted-foreground">Loading accounts…</div>
@@ -230,10 +188,9 @@ export function NavUser() {
                   <div className="px-1 py-1.5 text-xs text-muted-foreground">No additional accounts</div>
                 ) : (
                   accounts.map((acc) => (
-                    <button
+                    <div
                       key={acc.twitter_id}
-                      onClick={() => handleSwitchAccount(acc.twitter_id)}
-                      className={`w-full flex items-center gap-2 mb-1 px-2 py-1.5 text-left text-sm rounded-md hover:cursor-pointer hover:bg-accent ${acc.isActive ? 'bg-accent' : ''}`}
+                      className={`w-full flex items-center gap-2 mb-1 px-2 py-1.5 text-left text-sm rounded-md`}
                     >
                       <Avatar className="h-6 w-6 rounded-lg">
                         <AvatarImage src={acc.profile_image_url} alt={acc.name} />
@@ -243,7 +200,7 @@ export function NavUser() {
                         <span className="truncate text-sm">{acc.name}</span>
                         <span className="text-muted-foreground truncate text-xs">@{acc.screen_name}</span>
                       </div>
-                    </button>
+                    </div>
                   ))
                 )}
               </div>

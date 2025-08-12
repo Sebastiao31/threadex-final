@@ -1,29 +1,59 @@
 "use client"
 import React, { useState } from 'react'
-import { Button } from './ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
-import { IconArrowUp, IconLoader2, IconSend, IconViewportTall, IconWriting } from '@tabler/icons-react'
-import { Slider } from './ui/slider'
+import { IconArrowUp, IconLoader2, IconViewportTall, IconWriting } from '@tabler/icons-react'
+import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
 
 const ThreadGeneratorForm = () => {
 
-    const [isEmpty, setIsEmpty] = useState('')
+    const [topic, setTopic] = useState('')
     const [writingStyle, setWritingStyle] = useState('')
     const [threadLengthValue, setThreadLengthValue] = useState('')
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState('')
+    const router = useRouter()
 
     // Button is only enabled when all three fields have values
-    const isButtonDisabled = !isEmpty.trim() || !writingStyle || !threadLengthValue || isLoading
+    const isButtonDisabled = !topic.trim() || !writingStyle || !threadLengthValue || isLoading
+
+    
 
     const handleGenerateThread = async () => {
-        if (!isEmpty.trim()) {
-          setError('Please enter a topic for your thread')
-          return
+      if (!topic.trim()) {
+        setError('Please enter a topic for your thread')
+        return
+      }
+
+      setIsLoading(true)
+      setError('')
+
+      try {
+        const { data: userRes } = await supabase.auth.getUser()
+        const uid = userRes.user?.id
+        if (!uid) {
+          throw new Error('You must be signed in')
         }
 
-        setIsLoading(true)
-        setError('')
+        const lengthNum = parseInt(threadLengthValue, 10)
+        const resp = await fetch('/api/threads/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ topic: topic.trim(), writingStyle, length: lengthNum, uid }),
+        })
+        const json = await resp.json()
+        if (!resp.ok) {
+          throw new Error(json?.error || 'Failed to generate thread')
+        }
+        if (!json?.id) {
+          throw new Error('Invalid response: missing id')
+        }
+        router.push(`/dashboard/threads/${json.id}`)
+      } catch (err: any) {
+        setError(err?.message || 'An unexpected error occurred')
+      } finally {
+        setIsLoading(false)
+      }
     }
 
 
@@ -49,8 +79,8 @@ const ThreadGeneratorForm = () => {
     <div className="w-full max-w-2xl  mx-auto bg-[#FAFAFA] rounded-3xl border border-gray-200 p-2">
         <div>
             <textarea
-                value={isEmpty}
-                onChange={(e) => setIsEmpty(e.target.value)}
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
                 placeholder="Enter the topic thread you want to create..."
                 className="w-full p-3 text-sm resize-none focus:outline-none max-sm:text-sm placeholder-[#c8c8c8]"
                 disabled={isLoading}

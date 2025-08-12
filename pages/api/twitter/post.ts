@@ -22,7 +22,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { status } = req.body || {}
+    const { status, twitter_id: overrideTwitterId } = req.body || {}
     if (!status || typeof status !== 'string') {
       return res.status(400).json({ error: 'Missing status in body' })
     }
@@ -34,7 +34,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(401).json({ error: 'Not linked. No twitter_user_id cookie or uid provided.' })
     }
 
-    // Fetch tokens from twitter_user with fallbacks: twitter_id (cookie) → user_id (uid)
+    // Fetch tokens from twitter_user with priority:
+    // 1) explicit twitter_id override (if provided) with ownership check via uid
+    // 2) active cookie twitter_user_id
+    // 3) user_id (uid)
     const baseQuery = supabaseAdmin
       .from('twitter_user')
       .select('oauth_token, oauth_token_secret, screen_name, twitter_id, user_id')
@@ -44,14 +47,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let data: any = null
     let error: any = null
 
-    // Prefer active account selected via cookie for posting; fallback to uid mapping
-    if (twitterUserId) {
+    // 1) Explicit override
+    if (overrideTwitterId) {
+      const resOverride = await baseQuery.eq('twitter_id', overrideTwitterId).maybeSingle()
+      tried.push({ by: 'twitter_id (override)', value: overrideTwitterId, ok: !resOverride.error && !!resOverride.data, error: resOverride.error?.message })
+      if (!resOverride.error && resOverride.data) {
+        if (uid && resOverride.data.user_id && resOverride.data.user_id !== uid) {
+          return res.status(403).json({ error: 'Account does not belong to this user', twitter_id: overrideTwitterId })
+        }
+        data = resOverride.data
+      }
+    }
+
+    // 2) Active cookie
+    if (!data && twitterUserId) {
       const resCookie = await baseQuery.eq('twitter_id', twitterUserId).maybeSingle()
       tried.push({ by: 'twitter_id (cookie)', value: twitterUserId, ok: !resCookie.error && !!resCookie.data, error: resCookie.error?.message })
       if (!resCookie.error && resCookie.data) {
         data = resCookie.data
       }
     }
+    // 3) Fallback by uid
     if (!data && uid) {
       const resUid = await baseQuery.eq('user_id', uid).maybeSingle()
       tried.push({ by: 'user_id (uid)', value: uid, ok: !resUid.error && !!resUid.data, error: resUid.error?.message })

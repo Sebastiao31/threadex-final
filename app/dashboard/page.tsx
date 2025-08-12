@@ -20,22 +20,12 @@ export default function Page() {
       if (user) {
         setIsAuthed(true)
 
-        // Prefer twitter_user.name or screen_name if available
-        try {
-          const response = await fetch(`/api/user/profile?uid=${encodeURIComponent(user.id)}`)
-          if (response.ok) {
-            const profile = await response.json()
-            const twitterPreferredName: string = profile?.name || profile?.screen_name || "user"
-            setUserName(twitterPreferredName)
-          } else {
-            setUserName("user")
-          }
-        } catch (err) {
-          // Silently fall back to auth metadata name
-          setUserName("user")
-        } finally {
-          setIsLoadingName(false)
-        }
+        // Show authenticated user's display name (no account switching)
+        const fullName: string | undefined = (user.user_metadata as any)?.full_name
+        const displayName: string | undefined = (user.user_metadata as any)?.display_name
+        const email: string | undefined = user.email ?? undefined
+        setUserName(fullName || displayName || (email ? email.split('@')[0] : 'user'))
+        setIsLoadingName(false)
       } else {
         setIsAuthed(false)
         setIsLoadingName(false)
@@ -43,19 +33,10 @@ export default function Page() {
     }
     load()
 
-    // Re-fetch when active X account changes
-    const onSwitched = () => {
-      load()
-    }
-    if (typeof window !== 'undefined') {
-      window.addEventListener('x-account-switched', onSwitched)
-    }
-    return () => {
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('x-account-switched', onSwitched)
-      }
-    }
+    // No re-fetch on account switch (feature removed)
   }, [])
+
+  
 
   return (
     <>

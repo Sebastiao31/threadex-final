@@ -86,7 +86,7 @@ export default function SignUpForm({ className, ...props }: React.ComponentProps
             </div>
           </form>
           <div className="bg-muted relative hidden md:block">
-            <img src="/placeholder.svg" alt="Image" className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.2] dark:grayscale" />
+            <img src="/images/SignupIMG.png" alt="Image" className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.2] dark:grayscale" />
           </div>
         </CardContent>
       </Card>
